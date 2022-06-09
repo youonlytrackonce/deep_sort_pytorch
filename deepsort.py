@@ -25,6 +25,11 @@ class VideoTracker(object):
         self.args = args
         self.video_path = video_path
         self.logger = get_logger("root")
+        self.seq = video_path.split('/')[-1]
+        self.seq = self.seq.split('.')[0]
+        self.gt = video_path.split('/')
+        self.gt = self.gt[: -1]
+        self.gt = "/".join(self.gt) + "/gt/gt.txt"
 
         use_cuda = args.use_cuda and torch.cuda.is_available()
         if not use_cuda:
@@ -56,13 +61,14 @@ class VideoTracker(object):
             self.im_width = int(self.vdo.get(cv2.CAP_PROP_FRAME_WIDTH))
             self.im_height = int(self.vdo.get(cv2.CAP_PROP_FRAME_HEIGHT))
             assert self.vdo.isOpened()
+            self.fp = open(self.gt, "r")
 
         if self.args.save_path:
             os.makedirs(self.args.save_path, exist_ok=True)
 
             # path of saved video and results
-            self.save_video_path = os.path.join(self.args.save_path, "results.avi")
-            self.save_results_path = os.path.join(self.args.save_path, "results.txt")
+            self.save_video_path = os.path.join(self.args.save_path, self.seq + ".avi")
+            self.save_results_path = os.path.join(self.args.save_path, self.seq + ".txt")
 
             # create video writer
             fourcc = cv2.VideoWriter_fourcc(*'MJPG')
@@ -76,10 +82,20 @@ class VideoTracker(object):
     def __exit__(self, exc_type, exc_value, exc_traceback):
         if exc_type:
             print(exc_type, exc_value, exc_traceback)
+            self.fp.close()
 
     def run(self):
         results = []
         idx_frame = 0
+        lines = self.fp.readlines()
+        _lines = []
+        for i, x in enumerate(lines):
+            x = x.split(',')
+            x = list(map(float, x))
+            x = list(map(int, x))
+            _lines.extend([x])
+        inx = 0
+        line = _lines[inx]
         while self.vdo.grab():
             idx_frame += 1
             if idx_frame % self.args.frame_interval:
@@ -89,6 +105,17 @@ class VideoTracker(object):
             _, ori_im = self.vdo.retrieve()
             im = cv2.cvtColor(ori_im, cv2.COLOR_BGR2RGB)
 
+            bbox_xywh = []
+            while line[0] == idx_frame:
+                line = line[2:6]
+                line[0] += line[2]/2
+                line[1] += line[3] / 2
+                bbox_xywh.append(line)
+                inx += 1
+                line = _lines[inx]
+            bbox_xywh = np.array(bbox_xywh)
+            cls_conf = np.ones(len(bbox_xywh))
+            """
             # do detection
             bbox_xywh, cls_conf, cls_ids = self.detector(im)
 
@@ -99,7 +126,7 @@ class VideoTracker(object):
             # bbox dilation just in case bbox too small, delete this line if using a better pedestrian detector
             bbox_xywh[:, 3:] *= 1.2
             cls_conf = cls_conf[mask]
-
+            """
             # do tracking
             outputs = self.deepsort.update(bbox_xywh, cls_conf, im)
 
