@@ -155,12 +155,16 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
     cfg = get_config()
+    """
     if args.mmdet:
         cfg.merge_from_file(args.config_mmdetection)
         cfg.USE_MMDET = True
     else:
         cfg.merge_from_file(args.config_detection)
         cfg.USE_MMDET = False
+    """
+    cfg.merge_from_file(args.config_detection)
+    cfg.USE_MMDET = False
     cfg.merge_from_file(args.config_deepsort)
     if args.fastreid:
         cfg.merge_from_file(args.config_fastreid)
